@@ -378,9 +378,10 @@ test("missing bootstrap definitions fail open once without mutating global tools
   // Once failed open, promotion is sticky.
   assert.equal(await filterPayload(harness, ctx), undefined);
 
-  assert.equal(notifications.length, 1);
-  assert.equal(notifications[0].level, "warning");
-  assert.match(notifications[0].message, /bootstrap disabled.*full catalog/i);
+  // Activation fires an info-level notify; filter to warnings only.
+  const warnings = notifications.filter((n) => n.level === "warning");
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0].message, /bootstrap disabled.*full catalog/i);
   assert.deepEqual(harness.activeToolSnapshots, []);
 });
 
@@ -397,8 +398,10 @@ test("a provider payload without tools is left unchanged without consuming boots
     undefined,
   );
   assert.deepEqual(payloadToolNames(await filterPayload(harness, ctx)), ["read", "bash"]);
-  assert.equal(notifications.length, 1);
-  assert.match(notifications[0].message, /tools array unavailable.*payload unchanged/i);
+  // Activation fires an info-level notify; filter to warnings only.
+  const warnings = notifications.filter((n) => n.level === "warning");
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0].message, /tools array unavailable.*payload unchanged/i);
 });
 
 test("session inspection failure keeps the Minimal prompt but fails open on tools", async () => {
