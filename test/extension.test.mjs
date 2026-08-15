@@ -103,18 +103,24 @@ async function filterPayload(harness, ctx, payload = openAiPayload()) {
   );
 }
 
-test("does not register any configurable flag", () => {
+test("registers the promote-on flag under this project's own namespace", () => {
   assert.equal(typeof extensionModule.default, "function");
   const harness = createPi();
-  let flagRegistered = false;
+  const flags = new Map();
   const api = {
     ...harness.api,
-    registerFlag() {
-      flagRegistered = true;
+    registerFlag(name, options) {
+      flags.set(name, options);
     },
   };
   extensionModule.default(api);
-  assert.equal(flagRegistered, false);
+  // Must NOT reuse hank9999's ds-anchored-promote-on name.
+  assert.equal(flags.has("ds-anchored-promote-on"), false);
+  assert.deepEqual(flags.get("ds-minimal-mode-promote-on"), {
+    description: "Promotion trigger: either, tool-call, or assistant-message",
+    type: "string",
+    default: "either",
+  });
 });
 
 test("the first target request gets the Minimal prompt and only exposes bash/read", async () => {
