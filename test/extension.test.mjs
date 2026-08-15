@@ -103,22 +103,18 @@ async function filterPayload(harness, ctx, payload = openAiPayload()) {
   );
 }
 
-test("registers the configurable durable promotion trigger", () => {
+test("does not register any configurable flag", () => {
   assert.equal(typeof extensionModule.default, "function");
   const harness = createPi();
-  const flags = new Map();
+  let flagRegistered = false;
   const api = {
     ...harness.api,
-    registerFlag(name, options) {
-      flags.set(name, options);
+    registerFlag() {
+      flagRegistered = true;
     },
   };
   extensionModule.default(api);
-  assert.deepEqual(flags.get("ds-anchored-promote-on"), {
-    description: "Promotion trigger: either, tool-call, or assistant-message",
-    type: "string",
-    default: "either",
-  });
+  assert.equal(flagRegistered, false);
 });
 
 test("the first target request gets the Minimal prompt and only exposes bash/read", async () => {

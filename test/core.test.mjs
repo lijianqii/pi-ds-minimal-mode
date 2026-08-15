@@ -48,7 +48,8 @@ test("isTargetModelId uses substring semantics, so extended model ids still matc
 
 test("hasPromotionSignal keeps an empty session in bootstrap", () => {
   assert.equal(typeof core.hasPromotionSignal, "function");
-  assert.equal(core.hasPromotionSignal([], "either"), false);
+  assert.equal(core.hasPromotionSignal([]), false);
+  assert.equal(core.hasPromotionSignal(undefined), false);
 });
 
 test("a text-only assistant message promotes", () => {
@@ -58,7 +59,7 @@ test("a text-only assistant message promotes", () => {
       message: { role: "assistant", content: [{ type: "text", text: "Done" }] },
     },
   ];
-  assert.equal(core.hasPromotionSignal(entries, "either"), true);
+  assert.equal(core.hasPromotionSignal(entries), true);
 });
 
 test("an assistant toolCall promotes", () => {
@@ -71,7 +72,7 @@ test("an assistant toolCall promotes", () => {
       },
     },
   ];
-  assert.equal(core.hasPromotionSignal(entries, "either"), true);
+  assert.equal(core.hasPromotionSignal(entries), true);
 });
 
 test("user messages do not promote", () => {
@@ -81,12 +82,12 @@ test("user messages do not promote", () => {
       message: { role: "user", content: [{ type: "text", text: "Hi" }] },
     },
   ];
-  assert.equal(core.hasPromotionSignal(entries, "either"), false);
+  assert.equal(core.hasPromotionSignal(entries), false);
 });
 
 test("non-message entries do not promote", () => {
   const entries = [{ type: "tool_result", toolCallId: "call-1" }];
-  assert.equal(core.hasPromotionSignal(entries, "either"), false);
+  assert.equal(core.hasPromotionSignal(entries), false);
 });
 
 test("selectBootstrapTools preserves catalog order while keeping bash and read", () => {
