@@ -123,24 +123,32 @@ export default function dsMinimalMode(pi) {
   });
 
   pi.on("before_agent_start", (_event, ctx) => {
-    if (!syncTargetModel(ctx)) return undefined;
+    console.error(`[ds-minimal-mode] before_agent_start fired, model=${ctx.model?.id}, ready=${ready}, promoted=${promoted}`);
+    if (!syncTargetModel(ctx)) {
+      console.error(`[ds-minimal-mode] before_agent_start: not target model, returning undefined`);
+      return undefined;
+    }
     scanNewDurableEntries(ctx);
     agentRunActive = true;
+    console.error(`[ds-minimal-mode] before_agent_start: returning Minimal prompt (${MINIMAL_SYSTEM_PROMPT.length} chars), promoted=${promoted}`);
     return { systemPrompt: MINIMAL_SYSTEM_PROMPT };
   });
 
   pi.on("before_provider_request", (event, ctx) => {
+    console.error(`[ds-minimal-mode] before_provider_request fired, model=${ctx.model?.id}, ready=${ready}, active=${agentRunActive}, promoted=${promoted}`);
     if (
       !ready ||
       !agentRunActive ||
       promoted ||
       !isTargetModelId(ctx.model?.id)
     ) {
+      console.error(`[ds-minimal-mode] before_provider_request: passthrough (not filtering)`);
       return undefined;
     }
 
     const payload = event.payload;
     if (payload === null || typeof payload !== "object" || !Array.isArray(payload.tools)) {
+      console.error(`[ds-minimal-mode] before_provider_request: no tools array in payload`);
       warnOnce(
         ctx,
         "pi-ds-minimal-mode: provider tools array unavailable; payload unchanged",
@@ -148,6 +156,7 @@ export default function dsMinimalMode(pi) {
       return undefined;
     }
 
+    console.error(`[ds-minimal-mode] before_provider_request: payload.tools has ${payload.tools.length} items: ${payload.tools.map(t => t?.name ?? t?.function?.name ?? "?").join(",")}`);
     try {
       const bootstrap = filterBootstrapToolDefinitions(
         payload.tools,
@@ -155,6 +164,7 @@ export default function dsMinimalMode(pi) {
         COMMON_TOOLS,
       );
       if (!bootstrap.ok) {
+        console.error(`[ds-minimal-mode] before_provider_request: filter FAILED: ${bootstrap.reason}`);
         promoted = true;
         warnOnce(
           ctx,
@@ -162,6 +172,7 @@ export default function dsMinimalMode(pi) {
         );
         return undefined;
       }
+      console.error(`[ds-minimal-mode] before_provider_request: returning filtered payload with ${bootstrap.tools.length} tools: ${bootstrap.tools.map(t => t?.name ?? t?.function?.name ?? "?").join(",")}`);
       return { ...payload, tools: bootstrap.tools };
     } catch {
       promoted = true;
