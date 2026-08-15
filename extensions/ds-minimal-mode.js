@@ -140,8 +140,15 @@ export default function dsMinimalMode(pi) {
 
   // System prompt is replaced for every target-model agent run. It is the
   // byte-stable Minimal persona and never changes across the session.
-  // Handler is async to match the official Pi ExtensionAPI signature.
-  pi.on("before_agent_start", async (_event, ctx) => {
+  //
+  // IMPORTANT: this handler MUST be synchronous. hank9999/pi-ds-anchored (the
+  // verified-working reference) uses a sync handler. If this is async, the
+  // function body runs in a microtask, so the returned { systemPrompt } is a
+  // Promise by the time Pi's synchronous hook dispatcher consumes it —
+  // `Promise.systemPrompt` is undefined and the replacement silently no-ops.
+  // The same delay also defers the `agentRunActive = true` side effect, which
+  // can make before_provider_request skip tool filtering. Keep this sync.
+  pi.on("before_agent_start", (_event, ctx) => {
     if (!syncTargetModel(ctx)) return undefined;
     scanNewDurableEntries(ctx);
     agentRunActive = true;
