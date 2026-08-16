@@ -1,40 +1,13 @@
 {
   "name": "pi-ds-minimal-mode",
-  "version": "0.1.0",
-  "description": "Model-gated two-phase Pi extension for DeepSeek V4 Flash & Pro: Minimal-aligned first request, then the full active tool catalog",
-  "type": "module",
+  "version": "1.0.0",
+  "description": "Pi coding agent extension mirroring the DeepSeek Harness minimal preset — fixed system prompt + first-request read/bash restriction, active only on deepseek-v4-flash / deepseek-v4-pro.",
+  "keywords": ["pi-package"],
   "license": "MIT",
-  "keywords": [
-    "pi-package",
-    "pi-extension",
-    "deepseek",
-    "deepseek-v4",
-    "deepseek-v4-flash",
-    "deepseek-v4-pro",
-    "minimal-mode",
-    "prompt-alignment"
-  ],
-  "engines": {
-    "node": ">=22.19.0"
-  },
-  "files": [
-    "extensions/",
-    "lib/",
-    "README.md",
-    "README.en.md",
-    "LICENSE",
-    "NOTICE"
-  ],
-  "scripts": {
-    "test": "node --test",
-    "check": "node --check extensions/ds-minimal-mode.js && node --check lib/core.js && node --test"
+  "pi": {
+    "extensions": ["./extensions/ds-minimal-mode.ts"]
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
-  },
-  "pi": {
-    "extensions": [
-      "./extensions/ds-minimal-mode.js"
-    ]
   }
 }
