@@ -72,7 +72,7 @@ const DEEPSEEK_READ_DESCRIPTION = `View the contents of a file or directory.
 * If the output is long, it will be truncated and marked with \`<response clipped>\`.`;
 
 /** Tools exposed to the model on the first target-model request only. */
-const FIRST_REQUEST_TOOLS = ["read", "bash"];
+const FIRST_REQUEST_TOOLS = ["bash"];
 
 /** True when the given model is one of TARGET_MODEL_IDS (id match, case-insensitive). */
 const isTargetModel = (model: { id?: string } | undefined): boolean => {

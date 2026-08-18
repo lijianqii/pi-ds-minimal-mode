@@ -11,7 +11,7 @@
    - `bash`：直接采用极简模式 `persistent-bash` 的描述原文。
    - `read`：DeepSeek 极简模式没有独立 read 工具（它用 `str_replace_editor` 的 `view` 读文件），故把 Pi 的 `read` 描述对齐到 `view` 语义（`cat -n` 行号、目录列出、行范围、截断）。执行逻辑不变，只改模型可见的描述。
 
-3. **首次（目标模型的）请求只暴露 `read` 和 `bash`**；该请求结束后，后续所有请求放开全部可用工具。
+3. **首次（目标模型的）请求只暴露 `bash`**；该请求结束后，后续所有请求放开全部可用工具。
 
 切到非目标模型时：read/bash 描述立即恢复 Pi 内置默认，系统提示词不再固定，工具限制立即解除。
 
@@ -23,13 +23,13 @@
 
 | 事件 | 行为 |
 |------|------|
-| `session_start` | 重置"首次"标记；按当前模型同步 read/bash 描述；若为目标模型则限制为 `["read","bash"]` |
+| `session_start` | 重置"首次"标记；按当前模型同步 read/bash 描述；若为目标模型则限制为 `["bash"]` |
 | `model_select` | 按新模型切换 read/bash 描述（目标→DeepSeek 版，非目标→内置版）；目标且首次未完成则限制，否则放开全部 |
-| `before_agent_start` | 目标模型且首次未完成 → 再次强制 `read + bash`；目标模型时把系统提示词设为固定值（非目标不干预） |
-| `turn_start` | 目标模型且首次未完成 → 第三次强制 `read + bash` |
+| `before_agent_start` | 目标模型且首次未完成 → 再次强制 `bash`；目标模型时把系统提示词设为固定值（非目标不干预） |
+| `turn_start` | 目标模型且首次未完成 → 第三次强制 `bash` |
 | `turn_end` | 首个**目标模型**的 turn_end → 置 `firstRequestDone=true`，放开全部工具（非目标模型的 turn 不改变状态） |
 
-> 设计要点：非目标模型的请求不会把 `firstRequestDone` 置位，因此"先用非目标模型聊几句，再切到目标模型"时，目标模型的第一次请求仍会触发 read+bash 限制。
+> 设计要点：非目标模型的请求不会把 `firstRequestDone` 置位，因此"先用非目标模型聊几句，再切到目标模型"时，目标模型的第一次请求仍会触发 bash 限制。
 
 ## 安装
 
@@ -56,19 +56,24 @@ pi -e ./ds-minimal-mode.ts
 
 安装到自动发现目录后，可用 `/reload` 热重载，无需重启。
 
+也可通过 pi 包安装（仓库已含 `package.json` 的 `pi` manifest）：
+```bash
+pi install git:github.com/lijianqii/pi-ds-minimal-mode
+```
+
 ## 验证
 
-1. 切到 `deepseek-v4-flash` 或 `deepseek-v4-pro`（`/model` 或 Ctrl+P），会看到 `ds-minimal-mode active.`，以及 `First request restricted to: read, bash`
-2. 第一次提问，模型只能调用 `read` / `bash`（描述为 DeepSeek 极简模式版本）
+1. 切到 `deepseek-v4-flash` 或 `deepseek-v4-pro`（`/model` 或 Ctrl+P），会看到 `ds-minimal-mode active.`，以及 `First request restricted to: bash`
+2. 第一次提问，模型只能调用 `bash`（描述为 DeepSeek 极简模式版本）
 3. 第一轮结束后看到 `First request complete — all tools enabled.`
-4. 之后可使用 `edit`、`write`、`grep`、`find`、`ls` 等全部工具（`read`/`bash` 仍是 DeepSeek 描述版）
+4. 之后可使用 `read`、`edit`、`write`、`grep`、`find`、`ls` 等全部工具（`read`/`bash` 仍是 DeepSeek 描述版）
 5. 切到其它模型 → 看到 `ds-minimal-mode inactive (non-target model).`，系统提示词与工具描述恢复 Pi 默认
 6. 系统提示词（目标模型下）恒为 `You are a helpful software engineer assistant.`，可用 `/system` 确认
 
 ## 自定义
 
 - 想改生效模型：修改 `TARGET_MODEL_IDS`（默认 `["deepseek-v4-flash","deepseek-v4-pro"]`）。匹配用 `id.includes(t)`，如需精确匹配可改成 `id === t`。
-- 想改首次暴露的工具：修改 `FIRST_REQUEST_TOOLS`（默认 `["read","bash"]`）。
+- 想改首次暴露的工具：修改 `FIRST_REQUEST_TOOLS`（默认 `["bash"]`）。
 - 想改固定提示词：修改 `FIXED_SYSTEM_PROMPT`。
 - 想改 `read`/`bash` 的对齐描述：修改 `DEEPSEEK_READ_DESCRIPTION` / `DEEPSEEK_BASH_DESCRIPTION`。
 - 想"放开"时只恢复到用户配置的默认工具集（而非全部工具）：把 `turn_end` 里的 `pi.setActiveTools([...new Set(allTools)])` 换成恢复你在 `session_start` 中预先保存的默认集即可。
