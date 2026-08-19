@@ -8,9 +8,10 @@
  * no first-request restriction.
  *
  * When the active model IS a target model:
- *  1. The system prompt is ALWAYS fixed to:
+ *  1. On the FIRST target-model request only, the system prompt is fixed to:
  *       "You are a helpful software engineer assistant."
- *     (the complete persona text from the DeepSeek minimal preset)
+ *     (the complete persona text from the DeepSeek minimal preset).
+ *     Subsequent requests revert to Pi's default system prompt.
  *
  *  2. The built-in `read` and `bash` tools are overridden so their
  *     model-facing descriptions align with the DeepSeek minimal preset:
@@ -170,11 +171,13 @@ export default function dsMinimalMode(pi: ExtensionAPI) {
   // ------------------------------------------------------------------
   // before_agent_start: re-assert the restriction (in case resource
   // discovery / tool re-binding reset it) and fix the system prompt —
-  // but only on a target model.
+  // but ONLY on the FIRST target-model request. After that, the system
+  // prompt reverts to Pi's default.
   // ------------------------------------------------------------------
   pi.on("before_agent_start", async (_event, ctx) => {
-    if (isTargetModel(ctx.model) && !firstRequestDone) restrictTools();
-    return isTargetModel(ctx.model) ? { systemPrompt: FIXED_SYSTEM_PROMPT } : undefined;
+    const firstTargetRequest = isTargetModel(ctx.model) && !firstRequestDone;
+    if (firstTargetRequest) restrictTools();
+    return firstTargetRequest ? { systemPrompt: FIXED_SYSTEM_PROMPT } : undefined;
   });
 
   // ------------------------------------------------------------------
