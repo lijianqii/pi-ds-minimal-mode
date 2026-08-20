@@ -8,10 +8,10 @@
  * no first-request restriction.
  *
  * When the active model IS a target model:
- *  1. On the FIRST target-model request only, the system prompt is fixed to:
- *       "You are a helpful software engineer assistant."
- *     (the complete persona text from the DeepSeek minimal preset).
- *     Subsequent requests revert to Pi's default system prompt.
+ *  1. Whenever the active model IS a target model, the system prompt is fixed
+ *     to the project engineering persona (FIXED_SYSTEM_PROMPT) on EVERY request
+ *     — not just the first. Switching to a non-target model reverts to Pi's
+ *     default system prompt.
  *
  *  2. The built-in `read` and `bash` tools are overridden so their
  *     model-facing descriptions align with the DeepSeek minimal preset:
@@ -20,9 +20,13 @@
  *                 semantics (the minimal preset has no standalone read
  *                 tool; it reads files via `view`). Execution is unchanged.
  *
- *  3. On the very first target-model request of a session, only `read` and
- *     `bash` are exposed. After that request finishes (first turn_end on a
- *     target model), all available tools are enabled for subsequent requests.
+ *  3. On the very first target-model request of a session, only `bash` is
+ *     exposed (see FIRST_REQUEST_TOOLS). Once that request completes
+ *     successfully (first turn_end with a non-error stopReason on a target
+ *     model), all available tools are enabled for subsequent requests. If the
+ *     first request FAILS (network timeout, model unavailable, user abort —
+ *     stopReason "error"/"aborted"), the minimal first-request state is kept
+ *     so a retry is still restricted to bash with the fixed persona.
  *
  * Switching to a non-target model reverts the tool descriptions to Pi's
  * built-in defaults and lifts any restriction immediately.
@@ -44,8 +48,113 @@ import { createBashTool, createReadTool } from "@earendil-works/pi-coding-agent"
 /** Models for which the DeepSeek-minimal-mode behavior is active. */
 const TARGET_MODEL_IDS = ["deepseek-v4-flash", "deepseek-v4-pro"];
 
-/** The complete persona text from the DeepSeek minimal preset. */
-const FIXED_SYSTEM_PROMPT = "You are a helpful software engineer assistant.";
+/**
+ * Project engineering persona. Fixed as the system prompt on EVERY target-model
+ * request (full-time), not just the first. Replaces Pi's default system prompt
+ * whenever the active model is a target model; reverts to Pi's default on
+ * non-target models.
+ */
+const FIXED_SYSTEM_PROMPT = `# 角色
+你是 Pi Coding Agent，一名资深软件工程师。你的职责是将用户需求转化为高质量、可运行、可维护的软件交付物。你遵循五阶段工程流程，并在必要时主动与用户确认。
+
+# 全局原则
+- 先理解，后动手：未明确需求和验收标准前，不编写实现代码。
+- 主动澄清：遇到模糊、缺失、冲突的需求，必须停下来向用户提问，不臆测。
+- 结果可运行：交付物应包含运行/构建所需的最小配置、依赖说明和验证方式。
+- 工程最佳实践：遵守 SOLID、DRY、KISS、YAGNI；代码可读、可测试、可维护。
+- 安全与性能：避免常见安全漏洞（如注入、XSS、越权），关注复杂度与性能瓶颈。
+- 决策可追溯：关键技术选型和架构决策必须说明理由与权衡。
+- 语言：与用户沟通使用中文；代码、注释、文档可使用中英文，但需保持一致。
+
+# 工作流程
+你必须按以下五个阶段推进。每个阶段开始时，用 \`[阶段 N/5] 阶段名\` 标注当前阶段。根据任务复杂度，阶段 1 和 2 可以快速完成，但必须有明确输出。
+
+## 阶段 1：明确目标
+目标：与用户对齐"要做什么"和"做到什么程度算完成"。
+
+执行：
+- 用 1-3 句话复述用户需求，确认理解一致。
+- 提取项目背景、目标用户、核心问题、约束条件。
+- 定义可验证的验收标准（Definition of Done）。
+- 如果需求不明确，列出具体澄清问题；一次最多 3-5 个，按优先级排序。
+
+输出：
+- 目标摘要
+- 验收标准
+- 待确认问题（如有）
+
+## 阶段 2：拆解需求
+目标：把目标拆成可执行、可验证的需求项。
+
+执行：
+- 拆解功能需求（FR）和非功能需求（NFR，如性能、安全、兼容性）。
+- 明确范围边界：本次包含什么、不包含什么。
+- 识别核心实体、数据流、状态变化、接口、异常场景。
+- 标记关键风险与依赖。
+
+输出：
+- 需求清单（可勾选）
+- 非功能需求
+- 范围边界
+- 风险/依赖
+
+## 阶段 3：选择技术方案
+目标：确定最合适的技术路径和架构。
+
+执行：
+- 基于需求选择技术栈、架构模式、关键库/框架。
+- 如需选择，提供 1-2 个备选方案，并比较优缺点。
+- 说明关键设计：模块划分、数据存储、API 设计、错误处理、安全策略。
+- 给出项目目录结构或架构图（文字版）。
+
+输出：
+- 技术栈与版本
+- 架构说明
+- 关键设计决策及理由
+- 目录结构
+
+## 阶段 4：规划实现步骤
+目标：把方案拆成可执行、可验证的小步骤。
+
+执行：
+- 按依赖关系排序，拆解为实现步骤。
+- 每步包含：任务描述、涉及文件/模块、完成标准、验证方式。
+- 标注里程碑节点，如"数据库模型完成，可运行迁移"。
+- 如果步骤过多，可分组为模块或阶段。
+
+输出：
+- 编号步骤列表
+- 依赖关系
+- 每步验证方式
+- 里程碑
+
+## 阶段 5：输出结果
+目标：交付完整、可运行的实现，并提供使用说明。
+
+执行：
+- 按计划生成代码、配置、依赖清单、README、测试用例。
+- 代码应结构清晰、注释适量；避免无意义注释。
+- 交付前自查：能否运行、是否满足验收标准、错误处理是否完善、是否有遗漏。
+- 若无法实际运行，明确说明验证方式和预期结果。
+
+输出：
+- 最终代码/文件
+- 运行说明（安装、配置、启动、测试）
+- 测试结果或验证方法
+- 后续建议/已知限制
+
+# 交互规则
+- 如果你需要更多信息，立即停止，优先提问；不要假装知道用户没说清楚的内容。
+- 如果用户回答仍不明确，可继续追问，但避免无限提问；对低风险细节可采用合理默认值并标注假设。
+- 当用户说"继续"时，从当前阶段继续执行。
+- 如果用户要求跳过某阶段，先简短提醒风险，再遵循用户指令。
+- 对简单任务，可以合并阶段 1-2 并快速输出，但仍需保留"目标/需求/方案/步骤/结果"的轻量结构。
+
+# 输出格式
+- 使用 Markdown 结构化输出。
+- 代码放在代码块中，并标注语言。
+- 关键风险、待确认事项、假设使用 \`> ⚠️\` 或 \`> 📌\` 标记。
+- 不要输出与当前阶段无关的大段内容。`;
 
 /**
  * DeepSeek minimal preset — `persistent-bash` description, verbatim.
@@ -80,6 +189,30 @@ const isTargetModel = (model: { id?: string } | undefined): boolean => {
   const id = (model?.id ?? "").toLowerCase();
   // `includes` tolerates version suffixes (e.g. deepseek-v4-flash-2026xx).
   return TARGET_MODEL_IDS.some((t) => id === t || id.includes(t));
+};
+
+/**
+ * stopReason values that mean a turn completed for real (vs failed/aborted).
+ * Per the provider StreamFn contract, network/model/runtime failures are
+ * encoded as a final AssistantMessage with stopReason "error" or "aborted"
+ * (plus an optional user abort). Those must NOT lift the first-request
+ * restriction — the user will retry, and that retry must still be minimal.
+ */
+const SUCCESS_STOP_REASONS = new Set(["stop", "length", "toolUse", "deferred"]);
+
+/**
+ * True when the turn actually completed. `turn_end.message` is an AgentMessage;
+ * for a completed assistant turn it carries `role: "assistant"` + `stopReason`.
+ * Any other shape (or stopReason "error"/"aborted") is treated as not-done.
+ */
+const turnSucceeded = (message: unknown): boolean => {
+  const m = message as { role?: string; stopReason?: string } | undefined;
+  return (
+    !!m &&
+    m.role === "assistant" &&
+    typeof m.stopReason === "string" &&
+    SUCCESS_STOP_REASONS.has(m.stopReason)
+  );
 };
 
 export default function dsMinimalMode(pi: ExtensionAPI) {
@@ -130,7 +263,7 @@ export default function dsMinimalMode(pi: ExtensionAPI) {
 
   // ------------------------------------------------------------------
   // session_start: reset state, sync descriptions to the startup model,
-  // and restrict to read+bash if it's a target model.
+  // and restrict to FIRST_REQUEST_TOOLS (bash) if it's a target model.
   // ------------------------------------------------------------------
   pi.on("session_start", (_event, ctx) => {
     firstRequestDone = false;
@@ -169,15 +302,18 @@ export default function dsMinimalMode(pi: ExtensionAPI) {
   });
 
   // ------------------------------------------------------------------
-  // before_agent_start: re-assert the restriction (in case resource
-  // discovery / tool re-binding reset it) and fix the system prompt —
-  // but ONLY on the FIRST target-model request. After that, the system
-  // prompt reverts to Pi's default.
+  // before_agent_start: re-assert the tool restriction on the first
+  // target-model request (in case resource discovery / tool re-binding
+  // reset it), and fix the system prompt to the project persona on EVERY
+  // target-model request (full-time). On non-target models nothing is
+  // overridden, so Pi's default system prompt is used.
   // ------------------------------------------------------------------
   pi.on("before_agent_start", async (_event, ctx) => {
-    const firstTargetRequest = isTargetModel(ctx.model) && !firstRequestDone;
-    if (firstTargetRequest) restrictTools();
-    return firstTargetRequest ? { systemPrompt: FIXED_SYSTEM_PROMPT } : undefined;
+    const target = isTargetModel(ctx.model);
+    // Tool restriction still applies only to the first target-model request.
+    if (target && !firstRequestDone) restrictTools();
+    // Fixed persona applies on every target-model request, not just the first.
+    return target ? { systemPrompt: FIXED_SYSTEM_PROMPT } : undefined;
   });
 
   // ------------------------------------------------------------------
@@ -189,14 +325,29 @@ export default function dsMinimalMode(pi: ExtensionAPI) {
   });
 
   // ------------------------------------------------------------------
-  // turn_end: the first turn_end ON A TARGET MODEL marks the end of the
-  // first target-model request → open up all tools. Non-target turns do
-  // not flip firstRequestDone, so the restriction can still trigger when
-  // the user later switches to a target model.
+  // turn_end: the first SUCCESSFUL turn_end ON A TARGET MODEL marks the end
+  // of the first target-model request → open up all tools. Non-target turns
+  // do not flip firstRequestDone, so the restriction can still trigger when
+  // the user later switches to a target model. A failed/aborted first request
+  // (stopReason "error"/"aborted") leaves firstRequestDone = false so a retry
+  // stays minimal (bash-only + fixed persona) instead of silently reverting
+  // to the unmodified Pi environment.
   // ------------------------------------------------------------------
-  pi.on("turn_end", (_event, ctx) => {
+  pi.on("turn_end", (event, ctx) => {
     if (firstRequestDone) return;
     if (!isTargetModel(ctx.model)) return;
+
+    if (!turnSucceeded(event.message)) {
+      // First target-model request failed — keep the first-request state
+      // intact for the retry.
+      if (ctx.hasUI) {
+        ctx.ui.notify(
+          "First request failed — minimal mode kept for retry (bash only).",
+          "warning",
+        );
+      }
+      return;
+    }
 
     firstRequestDone = true;
     enableAllTools();
