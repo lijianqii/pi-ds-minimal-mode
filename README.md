@@ -4,7 +4,8 @@
 
 当当前模型是目标模型时：
 
-1. **目标模型下全时固定系统提示词**为项目工程化 persona（见 `FIXED_SYSTEM_PROMPT`，五阶段工程流程）；只要当前模型是目标模型，每一次请求都用该提示词，**并非仅首轮**。切到非目标模型时恢复 Pi 默认。
+1. **首轮（首次目标模型请求）固定系统提示词**为 `You are a helpful software engineer assistant.`
+   （正是 DeepSeek 极简模式 persona 的完整文本）；该请求结束后，系统提示词恢复 Pi 默认，不再固定。
 
 2. **覆盖内置 `read` 与 `bash` 的描述**，对齐 DeepSeek 极简模式：
    - `bash`：直接采用极简模式 `persistent-bash` 的描述原文。
@@ -12,7 +13,7 @@
 
 3. **首次（目标模型的）请求只暴露 `bash`**；该请求结束后，后续所有请求放开全部可用工具。
 
-切到非目标模型时：read/bash 描述立即恢复 Pi 内置默认，工具限制立即解除，系统提示词恢复 Pi 默认。
+切到非目标模型时：read/bash 描述立即恢复 Pi 内置默认，工具限制立即解除（系统提示词本就只在首轮目标请求固定，非目标模型一直用 Pi 默认）。
 
 ## 工作原理
 
@@ -24,7 +25,7 @@
 |------|------|
 | `session_start` | 重置"首次"标记；按当前模型同步 read/bash 描述；若为目标模型则限制为 `["bash"]` |
 | `model_select` | 按新模型切换 read/bash 描述（目标→DeepSeek 版，非目标→内置版）；目标且首次未完成则限制，否则放开全部 |
-| `before_agent_start` | 目标模型 → 每轮都把系统提示词固定为项目 persona（全时生效），且首次未完成时再强制 `bash`；非目标模型不干预（提示词用 Pi 默认） |
+| `before_agent_start` | 目标模型且首次未完成 → 再次强制 `bash`，并把系统提示词固定为 DeepSeek persona；首次过后或非目标模型不干预（提示词用 Pi 默认） |
 | `turn_start` | 目标模型且首次未完成 → 第三次强制 `bash` |
 | `turn_end` | 首个**目标模型且成功完成**的 turn_end（`stopReason` 非 `error`/`aborted`）→ 置 `firstRequestDone=true`，放开全部工具（非目标模型的 turn、以及首轮**失败**的 turn 都不改变状态） |
 
@@ -69,7 +70,7 @@ pi install git:github.com/lijianqii/pi-ds-minimal-mode
 3. 第一轮结束后看到 `First request complete — all tools enabled.`
 4. 之后可使用 `read`、`edit`、`write`、`grep`、`find`、`ls` 等全部工具（`read`/`bash` 仍是 DeepSeek 描述版）
 5. 切到其它模型 → 看到 `ds-minimal-mode inactive (non-target model).`，系统提示词与工具描述恢复 Pi 默认
-6. 系统提示词：目标模型下每次请求都是项目工程化 persona（五阶段流程），切到其它模型恢复 Pi 默认；可用 `/system` 确认
+6. 系统提示词：首轮（目标模型第一次请求）为 `You are a helpful software engineer assistant.`，之后恢复 Pi 默认；可用 `/system` 确认
 
 ## 自定义
 
