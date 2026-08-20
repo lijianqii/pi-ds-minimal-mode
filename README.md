@@ -4,8 +4,10 @@
 
 当当前模型是目标模型时：
 
-1. **首轮（首次目标模型请求）固定系统提示词**为 `You are a helpful software engineer assistant.`
-   （正是 DeepSeek 极简模式 persona 的完整文本）；该请求结束后，系统提示词恢复 Pi 默认，不再固定。
+1. **系统提示词分阶段固定**（仅目标模型下生效）：
+   - 首轮（首次目标模型请求）固定为 `You are a helpful software engineer assistant.`（DeepSeek 极简模式 persona 原文）。
+   - 首轮成功完成后，后续每一次请求固定为项目工程化中文 persona（五阶段工程流程，见 `SUBSEQUENT_SYSTEM_PROMPT`）。
+   - 切到非目标模型时恢复 Pi 默认。
 
 2. **覆盖内置 `read` 与 `bash` 的描述**，对齐 DeepSeek 极简模式：
    - `bash`：直接采用极简模式 `persistent-bash` 的描述原文。
@@ -13,7 +15,7 @@
 
 3. **首次（目标模型的）请求只暴露 `bash`**；该请求结束后，后续所有请求放开全部可用工具。
 
-切到非目标模型时：read/bash 描述立即恢复 Pi 内置默认，工具限制立即解除（系统提示词本就只在首轮目标请求固定，非目标模型一直用 Pi 默认）。
+切到非目标模型时：read/bash 描述立即恢复 Pi 内置默认，工具限制立即解除，系统提示词恢复 Pi 默认。
 
 ## 工作原理
 
@@ -25,7 +27,7 @@
 |------|------|
 | `session_start` | 重置"首次"标记；按当前模型同步 read/bash 描述；若为目标模型则限制为 `["bash"]` |
 | `model_select` | 按新模型切换 read/bash 描述（目标→DeepSeek 版，非目标→内置版）；目标且首次未完成则限制，否则放开全部 |
-| `before_agent_start` | 目标模型且首次未完成 → 再次强制 `bash`，并把系统提示词固定为 DeepSeek persona；首次过后或非目标模型不干预（提示词用 Pi 默认） |
+| `before_agent_start` | 目标模型 → 首轮固定 DeepSeek one-liner persona 并强制 `bash`；首轮之后固定为项目中文工程化 persona；非目标模型不干预（提示词用 Pi 默认） |
 | `turn_start` | 目标模型且首次未完成 → 第三次强制 `bash` |
 | `turn_end` | 首个**目标模型且成功完成**的 turn_end（`stopReason` 非 `error`/`aborted`）→ 置 `firstRequestDone=true`，放开全部工具（非目标模型的 turn、以及首轮**失败**的 turn 都不改变状态） |
 
@@ -70,13 +72,13 @@ pi install git:github.com/lijianqii/pi-ds-minimal-mode
 3. 第一轮结束后看到 `First request complete — all tools enabled.`
 4. 之后可使用 `read`、`edit`、`write`、`grep`、`find`、`ls` 等全部工具（`read`/`bash` 仍是 DeepSeek 描述版）
 5. 切到其它模型 → 看到 `ds-minimal-mode inactive (non-target model).`，系统提示词与工具描述恢复 Pi 默认
-6. 系统提示词：首轮（目标模型第一次请求）为 `You are a helpful software engineer assistant.`，之后恢复 Pi 默认；可用 `/system` 确认
+6. 系统提示词：首轮（目标模型第一次请求）为 `You are a helpful software engineer assistant.`，首轮成功之后变为项目工程化中文 persona（五阶段流程），切到其它模型恢复 Pi 默认；可用 `/system` 确认
 
 ## 自定义
 
 - 想改生效模型：修改 `TARGET_MODEL_IDS`（默认 `["deepseek-v4-flash","deepseek-v4-pro"]`）。匹配用 `id.includes(t)`，如需精确匹配可改成 `id === t`。
 - 想改首次暴露的工具：修改 `FIRST_REQUEST_TOOLS`（默认 `["bash"]`）。
-- 想改固定提示词：修改 `FIXED_SYSTEM_PROMPT`。
+- 想改固定提示词：首轮用 `FIRST_REQUEST_SYSTEM_PROMPT`，首轮之后用 `SUBSEQUENT_SYSTEM_PROMPT`。
 - 想改 `read`/`bash` 的对齐描述：修改 `DEEPSEEK_READ_DESCRIPTION` / `DEEPSEEK_BASH_DESCRIPTION`。
 - 想"放开"时只恢复到用户配置的默认工具集（而非全部工具）：把 `turn_end` 里的 `pi.setActiveTools([...new Set(allTools)])` 换成恢复你在 `session_start` 中预先保存的默认集即可。
 - 不想要通知提示：删掉各处 `ctx.ui.notify(...)` 调用。
